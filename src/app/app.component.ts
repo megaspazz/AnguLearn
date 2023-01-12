@@ -116,7 +116,7 @@ export class AppComponent {
     this.codemirrorEditor.dom.style.height = "100%";
     divEditor?.appendChild(this.codemirrorEditor.dom);
 
-    this.loadExercise(false);
+    this.loadExercise(this.exercise, false);
   }
   
   // Double an input observable.
@@ -491,7 +491,7 @@ export class AppComponent {
   }
 
   // TODO: finish adding more exercises.
-  // TODO: make a way to switch exercises.
+  // TODO: add versioning to exercises in case signatures change.
   public exercises: Exercise[] = [
     new Exercise(
       "doubleNumbers",
@@ -570,9 +570,9 @@ export class AppComponent {
   public userCode: string[] = Array<string>(this.exercises.length);
 
   setExercise(exercise: Exercise) {
-    this.exercise = exercise;
-    this.loadExercise(true);
-    console.log("userCode: ", this.userCode[0]);
+    if (this.loadExercise(exercise, true)) {
+      this.exercise = exercise;
+    }
   }
 
   makeCodeTemplate(exercise: Exercise): string {
@@ -595,22 +595,29 @@ export class AppComponent {
     });
   }
 
-  loadExercise(shouldPrompt: boolean) {
-    const exercise = this.exercise;
-    
-    const exerciseKey = this.makeStorageKey(this.exercise);
+  loadExercise(exercise: Exercise, shouldPrompt: boolean): boolean {
+    let currExerciseKey = this.makeStorageKey(this.exercise);
+    let savedCode = localStorage.getItem(currExerciseKey);
+    if (savedCode === null) {
+      savedCode = this.makeCodeTemplate(this.exercise);
+    }
+
+    const currCode = this.codemirrorEditor.state.doc.toString();
+
+    console.log(savedCode, "|", currCode);
+    if (shouldPrompt && savedCode !== currCode && !confirm("You will lose any unsaved changes.  Continue?")) {
+      return false;
+    }
+
+    const exerciseKey = this.makeStorageKey(exercise);
     let code = localStorage.getItem(exerciseKey);
     if (code === null) {
       code = this.makeCodeTemplate(exercise);
     }
 
-    const currCode = this.codemirrorEditor.state.doc.toString();
-    console.log("what is", currCode)
-    if (shouldPrompt && code !== currCode && !confirm("You will lose any unsaved changes.  Continue?")) {
-      return;
-    }
-
     this.setCode(code);
+
+    return true;
   }
 
   resetCode() {
