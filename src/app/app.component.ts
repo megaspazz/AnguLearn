@@ -396,44 +396,15 @@ export class AppComponent {
     dataSource.subscribe(x => console.log("test 2B: " + x));
   }
 
-  public solutionExercise1(source$: Observable<number>): Observable<number> {
-    return source$.pipe(
-      map(x => x << 1),
-    );
+  public checkConstantObservable(expectedAnswer$: Observable<any>): (args: any[], result: any) => Promise<boolean> {
+    return async (_, userResult$: any) => this.observablesEqual(userResult$, expectedAnswer$);
   }
 
-  public solutionExercise2(source$: Observable<number>): Observable<number> {
-    class Window {
-      sum: number;
-      count: number;
-
-      constructor(sum: number, count: number) {
-        this.sum = sum;
-        this.count = count;
-      }
-    };
-
-    return source$.pipe(
-      windowCount(2),
-      map(win$ => win$.pipe(
-        reduce((acc, curr) => new Window(acc.sum + curr, acc.count + 1), new Window(0, 0)),
-      )),
-      mergeAll(),
-      filter(x => x.count == 2),
-      map(x => x.sum),
-    );
+  public checkConstantObservableIgnoreOrder(expectedAnswer$: Observable<any>): (args: any[], result: any) => Promise<boolean> {
+    return async (_, userResult$: any) => this.observablesEqualIgnoreOrder(userResult$, expectedAnswer$);
   }
 
-  public solutionExercise3(source$: Observable<number | string>): Observable<string> {
-    let nums$ = source$.pipe(filter(inp => typeof(inp) === "number"));
-    let strs$ = source$.pipe(filter(inp => typeof(inp) === "string"));
-
-    return zip(strs$, nums$).pipe(
-      map(([str, num]) => str + " " + num),
-    );
-  }
-
-  public referenceFnObservable(f: (...args: any[]) => any): (args: any[], result: any) => Promise<boolean> {
+  public checkReferenceFnObservable(f: (...args: any[]) => any): (args: any[], result: any) => Promise<boolean> {
     return (args: any[], result: Observable<any>) => {
       let expected: Observable<any> = f(...args);
       return this.observablesEqual(result, expected);
@@ -457,6 +428,13 @@ export class AppComponent {
     };
   }
 
+  public checkReferenceFnObservableIgnoreOrder(f: (...args: any[]) => any): (args: any[], result: any) => Promise<boolean> {
+    return (args: any[], result: Observable<any>) => {
+      let expected: Observable<any> = f(...args);
+      return this.observablesEqualIgnoreOrder(result, expected);
+    };
+  }
+
   public async observableToArray<T>(observable$: Observable<T>): Promise<T[]> {
     let array$ = observable$.pipe(
       toArray(),
@@ -464,9 +442,9 @@ export class AppComponent {
     return await firstValueFrom(array$);
   }
 
-  public observablesEqual(a$: Observable<any>, b$: Observable<any>): Promise<boolean> {
-    let equal$ = a$.pipe(
-      sequenceEqual(b$),
+  public observablesEqual(userAnswer$: Observable<any>, expectedAnswer$: Observable<any>): Promise<boolean> {
+    let equal$ = userAnswer$.pipe(
+      sequenceEqual(expectedAnswer$),
     );
     return firstValueFrom(equal$);
 
@@ -479,6 +457,25 @@ export class AppComponent {
     //   reduce((acc, cur) => acc && cur, true),
     // );
     // return firstValueFrom(equal$);
+  }
+
+  public observablesEqualIgnoreOrder(userAnswer$: Observable<any>, expectedAnswer$: Observable<any>): Promise<boolean> {
+    let equalIgnoreOrder$ = zip(userAnswer$.pipe(toArray()), expectedAnswer$.pipe(toArray())).pipe(
+      every(([userArray, expectedArray]) => {
+        const sortedUserArray = [...userArray].sort();
+        const sortedExpectedArray = [...expectedArray].sort();
+        if (sortedUserArray.length !== sortedExpectedArray.length) {
+          return false;
+        }
+        for (let i = 0; i < sortedUserArray.length; ++i) {
+          if (sortedUserArray[i] !== sortedExpectedArray[i]) {
+            return false;
+          }
+        }
+        return true;
+      }),
+    );
+    return firstValueFrom(equalIgnoreOrder$);
   }
 
   public async observableArgsToString(args: Observable<any>[]): Promise<string[]> {
@@ -507,11 +504,11 @@ export class AppComponent {
       [
         new TestCase(
           [of(1, 2, 3)],
-          this.referenceFnObservable(this.solutionExercise1)  // example usage of `referenceFnObservable`
+          this.checkReferenceFnObservable(Solution.doubleNumbers)  // example usage of `checkReferenceFnObservable`
         ),
         new TestCase(
           [of(-100, 0, 0, 2023)],
-          async (_, result) => this.observablesEqual(result, of(-200, 0, 0, 4046))  // example usage of `observablesEqual`
+          this.checkConstantObservable(of(-200, 0, 0, 4046)),  // example usage of `checkConstantObservable`
         ),
       ],
     ),
@@ -529,11 +526,11 @@ export class AppComponent {
       [
         new TestCase(
           [of(1, 2, 3, 4, 5, 6, 7)],
-          this.referenceFnObservable(this.solutionExercise2)
+          this.checkReferenceFnObservable(Solution.sumConsecutiveTwo)
         ),
         new TestCase(
           [of(-1, 2, -3, 4, -5, 6)],
-          this.referenceFnObservable(this.solutionExercise2)
+          this.checkReferenceFnObservable(Solution.sumConsecutiveTwo)
         ),
       ],
     ),
@@ -551,14 +548,37 @@ export class AppComponent {
       [
         new TestCase(
           [of(2, 3, "i", "like", "prime", 5, 7, "numbers", 11)],
-          this.referenceFnObservable(this.solutionExercise3)
+          this.checkReferenceFnObservable(Solution.splitAndJoin)
         ),
         new TestCase(
           [of("hello", -1, "world", 0)],
-          this.referenceFnObservable(this.solutionExercise3)
+          this.checkReferenceFnObservable(Solution.splitAndJoin)
         ),
       ],
     ),
+    new Exercise(
+      "countWordFrequency",
+      "Count Word Frequency",
+      `Given an Observable<string>, return an Observable<string> where each value is in the form '$word:$frequency' for each unique $word in the input, $frequency is the number of occurrences of the $word in the input.  For example, ["a", "b", "A", "b"] -> ["a:1", "b:2", "A:1"].`,
+      new FunctionDefinition(
+        "countWordFrequency",
+        "Observable<string>",
+        [
+          new Parameter("source$", "Observable<string>"),
+        ],
+      ),
+      [
+        new TestCase(
+          [of("a", "b", "A", "b")],
+          this.checkConstantObservable(of("A:1", "a:1", "b:2")),  // example usage of `checkConstantObservableIgnoreOrder`
+        ),
+        new TestCase(
+          [of("the dog ate the hot dog on the hot day".split(" "))],
+          this.checkReferenceFnObservableIgnoreOrder(Solution.countFrequency),
+        ),
+      ],
+    ),
+    // TODO: build more exercises!!!
   ];
 
   // The following two need to be kept in sync!
@@ -674,6 +694,7 @@ export class AppComponent {
     `;
 
     // TODO: does transpile never throw an error?
+    // TODO: add compiler options so that it can catch some problems at transpile time?
     const js = transpile(ts + tsAssignCode);
     console.log(jsImportCode + js);
 
@@ -776,5 +797,53 @@ class TestCase {
   constructor(args: any[], checker: (args: any[], result: any) => Promise<boolean>) {
     this.args = args;
     this.checker = checker;
+  }
+}
+
+abstract class Solution {
+  public static doubleNumbers(source$: Observable<number>): Observable<number> {
+    return source$.pipe(
+      map(x => x << 1),
+    );
+  }
+
+  public static sumConsecutiveTwo(source$: Observable<number>): Observable<number> {
+    class Window {
+      sum: number;
+      count: number;
+
+      constructor(sum: number, count: number) {
+        this.sum = sum;
+        this.count = count;
+      }
+    };
+
+    return source$.pipe(
+      windowCount(2),
+      map(win$ => win$.pipe(
+        reduce((acc, curr) => new Window(acc.sum + curr, acc.count + 1), new Window(0, 0)),
+      )),
+      mergeAll(),
+      filter(x => x.count == 2),
+      map(x => x.sum),
+    );
+  }
+
+  public static splitAndJoin(source$: Observable<number | string>): Observable<string> {
+    let nums$ = source$.pipe(filter(inp => typeof(inp) === "number"));
+    let strs$ = source$.pipe(filter(inp => typeof(inp) === "string"));
+
+    return zip(strs$, nums$).pipe(
+      map(([str, num]) => str + " " + num),
+    );
+  }
+
+  public static countFrequency(source$: Observable<string>): Observable<string> {
+    return source$.pipe(
+      groupBy(identity),
+      mergeMap(group$ => zip(of(group$.key), group$.pipe(count())).pipe(
+        map(([group, count]) => group + ":" + count),
+      )),
+    );
   }
 }

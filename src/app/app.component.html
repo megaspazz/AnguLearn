@@ -5,6 +5,7 @@
     width: 100%;
     height: 100%;
   }
+
   .flex-container {
     display: flex;
     flex-flow: column;
@@ -35,28 +36,32 @@
     <div class="stretch-to-fit">
       <h2 style="color: red">NOTE:  Your code is only stored in the browser, so be sure to copy it somewhere safer if you truly cherish it!</h2>
       
-      <h1>Exercises</h1>
+      <h1>Select an Exercise</h1>
       <div style="display: inline-block; width: auto;">
         <div *ngFor="let exercise of this.exercises; let i = index;">
-          <button mat-stroked-button style="width: 100%; align-content: start;" (click)="setExercise(exercise)">
-            <span style="text-align: left; align-content: start; float: left;">
-              {{ i + 1 }}. {{ exercise.name }}
-            </span>
+          <button mat-stroked-button style="width: 100%; display: flex; justify-content: flex-start;" (click)="setExercise(exercise)">
+            {{ i + 1 }}. {{ exercise.name }}
           </button>
         </div>
       </div>
 
-      <h1>Code</h1>
-      <strong>{{ this.exercise.name }}</strong>
-      <p>{{ this.exercise.description }}</p>
+      <div style="margin: 24px 0px 12px 0px;">
+        <strong>{{ this.exercise.name }}</strong>
+        <p>{{ this.exercise.description }}</p>
+      </div>
       <div class="button-row">
         <div style="margin-right: auto;">
           <button mat-raised-button color="primary" (click)="runCode()">Run Code</button>
         </div>
         <div>
-          <button mat-fab (click)="resetCode()">Reset</button>
-          <button mat-fab (click)="saveCode()">Save</button>
-          <button mat-fab (click)="loadCode()">Load</button>
+          <a mat-flat-button color="warn" style="margin: 16px;" target="_blank" href="https://rxjs.dev/api">
+            <mat-icon>search</mat-icon>
+            <span>RxJs Reference</span>
+            <mat-icon iconPositionEnd>link</mat-icon>
+          </a>
+          <button mat-fab style="margin: 4px;" (click)="resetCode()">Reset</button>
+          <button mat-fab style="margin: 4px;" mat-fab (click)="saveCode()">Save</button>
+          <button mat-fab style="margin: 4px;" mat-fab (click)="loadCode()">Load</button>
         </div>
       </div>
     </div>
