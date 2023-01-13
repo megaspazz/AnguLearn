@@ -27,6 +27,21 @@
     display: flex;
     align-items: center;
   }
+/*   
+  ::ng-deep .mat-select-panel {
+    width: auto;
+    max-width: 100%;
+  }
+  
+  ::ng-deep .mat-select-content{
+    width:2000px;
+    background-color: red;
+    font-size: 10px;   
+} */
+
+  ::ng-deep .mat-select-panel {
+    max-width: fit-content;
+  }
 </style>
 
 
@@ -36,16 +51,19 @@
     <div class="stretch-to-fit">
       <h2 style="color: red">NOTE:  Your code is only stored in the browser, so be sure to copy it somewhere safer if you truly cherish it!</h2>
       
-      <h1>Select an Exercise</h1>
-      <div style="display: inline-block; width: auto;">
-        <div *ngFor="let exercise of this.exercises; let i = index;">
-          <button mat-stroked-button style="width: 100%; display: flex; justify-content: flex-start;" (click)="setExercise(exercise)">
-            {{ i + 1 }}. {{ exercise.name }}
-          </button>
-        </div>
-      </div>
+      <!-- TODO: Figure out how to automatically set the width. -->
+      <mat-form-field appearance="fill" style="width: 240px;">
+        <mat-label>Select an Exercise</mat-label>
+        <mat-select [value]="exercise" (selectionChange)="changeExercise($event)">
+          <mat-option *ngFor="let e of exercises; let i = index;" [value]="e">
+            <div>
+              {{ i + 1 }}. {{ e.name }}
+            </div>
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
 
-      <div style="margin: 24px 0px 12px 0px;">
+      <div style="margin: 6px 0px 6px 0px;">
         <strong>{{ this.exercise.name }}</strong>
         <p>{{ this.exercise.description }}</p>
       </div>

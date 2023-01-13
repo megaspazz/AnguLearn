@@ -589,6 +589,15 @@ export class AppComponent {
   // TODO: save user code somehow...
   public userCode: string[] = Array<string>(this.exercises.length);
 
+  changeExercise(event: any) {
+    const exercise = event.value;
+    if (this.loadExercise(exercise, true)) {
+      this.exercise = exercise;
+    } else {
+      event.source.setValue(this.exercise);
+    }
+  }
+
   setExercise(exercise: Exercise) {
     if (this.loadExercise(exercise, true)) {
       this.exercise = exercise;
