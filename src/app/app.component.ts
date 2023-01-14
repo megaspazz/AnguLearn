@@ -1,5 +1,5 @@
 import { Component, ElementRef, ViewChild } from '@angular/core';
-import { Observable, Subject, combineLatest, combineLatestWith, count, every, filter, firstValueFrom, from, groupBy, identity, of, last, map, mergeAll, mergeMap, reduce, sequenceEqual, takeLast, tap, toArray, windowCount, zip } from 'rxjs';
+import { Observable, Subject, combineLatest, combineLatestWith, concatWith, count, every, filter, firstValueFrom, from, groupBy, identity, of, last, map, mergeAll, mergeMap, reduce, sequenceEqual, scan, skip, takeLast, tap, toArray, windowCount, zip } from 'rxjs';
 import { transpile } from 'typescript';
 
 import * as rxjsAlias from 'rxjs';
@@ -570,11 +570,33 @@ export class AppComponent {
       [
         new TestCase(
           [of("a", "b", "A", "b")],
-          this.checkConstantObservable(of("A:1", "a:1", "b:2")),  // example usage of `checkConstantObservableIgnoreOrder`
+          this.checkConstantObservableIgnoreOrder(of("A:1", "a:1", "b:2")),  // example usage of `checkConstantObservableIgnoreOrder`
         ),
         new TestCase(
           [of("the dog ate the hot dog on the hot day".split(" "))],
           this.checkReferenceFnObservableIgnoreOrder(Solution.countFrequency),
+        ),
+      ],
+    ),
+    new Exercise(
+      "almostSorted",
+      "Almost Sorted",
+      `Given an almost-sorted Observable<number> where each number is at most two positions away from its sorted position, return an Observable<number> containing the input in sorted order.  For example, [3, 2, 1, 4, 7, 6, 5, 8] -> [1, 2, 3, 4, 5, 6, 7, 8].`,
+      new FunctionDefinition(
+        "almostSorted",
+        "Observable<number>",
+        [
+          new Parameter("source$", "Observable<number>"),
+        ],
+      ),
+      [
+        new TestCase(
+          [of(3, 2, 1, 4, 7, 6, 5, 8)],
+          this.checkConstantObservable(of(1, 2, 3, 4, 5, 6, 7, 8)),
+        ),
+        new TestCase(
+          [of(-6, -7, -8, 0, 17, 16, 15, 18)],
+          this.checkConstantObservable(of(-8, -7, -6, 0, 15, 16, 17, 18)),
         ),
       ],
     ),
@@ -853,6 +875,23 @@ abstract class Solution {
       mergeMap(group$ => zip(of(group$.key), group$.pipe(count())).pipe(
         map(([group, count]) => group + ":" + count),
       )),
+    );
+  }
+
+  // TODO: replace accumulator array with heap!
+  public static almostSorted(source$: Observable<number>): Observable<number> {
+    return source$.pipe(
+      concatWith(of(Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY)),
+      scan((acc, cur) => {
+        acc.push(cur);
+        acc.sort((a, b) => a - b);
+        if (acc.length > 3) {
+          acc = acc.slice(1);
+        }
+        return acc;
+      }, Array<number>()),
+      map(arr => arr[0]),
+      skip(2),
     );
   }
 }
