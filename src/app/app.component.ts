@@ -1,6 +1,6 @@
 import { Component, ElementRef, ViewChild } from '@angular/core';
-import { Observable, Subject, combineLatest, combineLatestWith, concatWith, count, every, filter, firstValueFrom, from, groupBy, identity, of, last, map, mergeAll, mergeMap, reduce, sequenceEqual, scan, skip, takeLast, tap, toArray, windowCount, zip } from 'rxjs';
-import { transpile } from 'typescript';
+import { Observable, Subject, combineLatest, combineLatestWith, concatWith, count, every, filter, firstValueFrom, from, groupBy, identity, of, last, map, mergeAll, mergeMap, noop, reduce, sequenceEqual, scan, shareReplay, skip, takeLast, tap, toArray, windowCount, zip } from 'rxjs';
+import { createJsxJsxClosingFragment, transpile } from 'typescript';
 
 import * as rxjsAlias from 'rxjs';
 
@@ -9,6 +9,7 @@ import { Compartment, EditorState } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { basicSetup } from 'codemirror';
 import { indentWithTab } from "@codemirror/commands";
+import { acceptCompletion } from "@codemirror/autocomplete";
 import { javascript } from '@codemirror/lang-javascript';
 import { UnaryOperator } from '@angular/compiler';
 // import { python} from '@codemirror/lang-python';
@@ -48,6 +49,8 @@ export class AppComponent {
     this.exercise2();
     this.exercise3();
     this.exercise4();
+
+    // console.log(Solution.almostSorted.toString());
 
     const abc = "what's up";
     eval("console.log(abc);");
@@ -106,7 +109,14 @@ export class AppComponent {
         doc: `console.log("get in loser!");`,
         extensions: [
           basicSetup,
-          keymap.of([indentWithTab]),
+          keymap.of([
+            indentWithTab,
+            // TODO: figure out how to accept autocomplete suggestions with [Tab] key.
+            {
+              key: "Tab",
+              run: acceptCompletion,
+            },
+          ]),
           language.of(javascript({
             typescript: true,
           })),
@@ -397,6 +407,7 @@ export class AppComponent {
   }
 
   public checkConstantObservable(expectedAnswer$: Observable<any>): (args: any[], result: any) => Promise<boolean> {
+    // console.log("expectedAnswer$", expectedAnswer$);
     return async (_, userResult$: any) => this.observablesEqual(userResult$, expectedAnswer$);
   }
 
@@ -436,6 +447,10 @@ export class AppComponent {
   }
 
   public async observableToArray<T>(observable$: Observable<T>): Promise<T[]> {
+    // console.log("observable$", typeof observable$, observable$);
+    // observable$.subscribe(
+    //   x => console.log("DEBUG", x),
+    // );
     let array$ = observable$.pipe(
       toArray(),
     );
@@ -482,7 +497,12 @@ export class AppComponent {
     let argsStrArray: string[] = [];
     for (const arg of args) {
       let arr = await this.observableToArray(arg);
-      argsStrArray.push(arr.join(", "));
+      argsStrArray.push(arr.map(x => {
+        if (x.toString !== Object.prototype.toString) {
+          return x.toString();
+        }
+        return JSON.stringify(x);
+      }).join(", "));
     }
     return argsStrArray;
   }
@@ -598,7 +618,57 @@ export class AppComponent {
           [of(-6, -7, -8, 0, 17, 16, 15, 18)],
           this.checkConstantObservable(of(-8, -7, -6, 0, 15, 16, 17, 18)),
         ),
+        // TODO: generate more test cases, and check against Solution.almostSorted.
       ],
+    ),
+    new Exercise(
+      "inventoryTracker",
+      "Inventory Tracker",
+      `Given an Observable<InventoryEvent> representing updates to an inventory, return an Observable<number> representing the actual update applied for the given item ID.  For remove operations (quantity < 0), output a negative number representing the actual amount removed.  If there is enough of the item in the inventory, remove the desired quantity.  Otherwise, remove all remaining items.  Similarly, for add operations (quantity > 0), add as many items as you can without exceeding the max capacity, and return the number of items added.  For example, with a maxCapacity of 10, with events [{"apple", 4}, {"banana", 9}, {"banana", -9}, {"apple", -1}], we should get [4, 6, -6, -1].  In the first operation, we add 4 apples, and our total size is 4.  In the second operation, we want to add 9 bananas, but we only have space for 6 more items, since we already have 4 apples, so we only add 6 bananas.  In the third operation, we want to remove 9 bananas, but we only have 6 bananas, so we can only remove 6.  In the fourth operation, we want to remove a single apple.  Since we have currently have 4 apples, we are able to remove the desired quantity.`,
+      new FunctionDefinition(
+        "trackInventory",
+        "Observable<number>",
+        [
+          new Parameter("source$", "Observable<InventoryEvent>"),
+          new Parameter("maxCapacity", "number"),
+        ],
+      ),
+      [
+        new TestCase(
+          [
+            of(
+              new InventoryEvent("apple", 4),
+              new InventoryEvent("banana", 9),
+              new InventoryEvent("banana", -9),
+              new InventoryEvent("apple", -1),
+            ),
+            10,
+          ],
+          this.checkConstantObservable(of(4, 6, -6, -1)),
+        ),
+        new TestCase(
+          [
+            of(
+              new InventoryEvent("asparagus", 33),
+              new InventoryEvent("broccoli", 66),
+              new InventoryEvent("asparagus", 99),
+              new InventoryEvent("asparagus", 0),
+              new InventoryEvent("asparagus", -100),
+              new InventoryEvent("asparagus", -100),
+              new InventoryEvent("asparagus", 0),
+              new InventoryEvent("broccoli", 1000),
+              new InventoryEvent("broccoli", -1000),
+              new InventoryEvent("carrot", -100),
+              new InventoryEvent("carrot", 100),
+              new InventoryEvent("daikon_radish", 100),
+            ),
+            100,
+          ],
+          this.checkConstantObservable(of(33, 66, 1, 0, -34, 0, 0, 34, -100, 0, 100, 0)),
+        ),
+        // TODO: generate more test cases, and check against Solution.trackInventory.
+      ],
+      INVENTORY_EVENT_STR,
     ),
     // TODO: build more exercises!!!
   ];
@@ -616,7 +686,7 @@ export class AppComponent {
     if (this.loadExercise(exercise, true)) {
       this.exercise = exercise;
     } else {
-      event.source.setValue(this.exercise);
+      event.source.writeValue(this.exercise);
     }
   }
 
@@ -633,6 +703,10 @@ export class AppComponent {
     codeLines.push(`function ${fnDef.functionName}(${paramsAsString}): ${fnDef.returnType} {`);
     codeLines.push(`  `);
     codeLines.push("}");
+    if (typeof exercise.comments !== "undefined") {
+      codeLines.push("");
+      codeLines.push(exercise.comments!);
+    }
     return codeLines.join("\n");
   }
 
@@ -703,6 +777,15 @@ export class AppComponent {
     return `exercise:${exercise.id}`;
   }
 
+  arrayToString(arr: any[]): string {
+    return arr.map(x => {
+      if (x.toString !== Object.prototype.toString) {
+        return x.toString();
+      }
+      return JSON.stringify(x);
+    }).join(", ");
+  }
+
   async runCode() {
     const exercise = this.exercise;
 
@@ -741,7 +824,7 @@ export class AppComponent {
     for (const testCase of exercise.testCases) {
       let result: any;
       try {
-        result = f(...testCase.args);
+        result = f(...testCase.args).pipe(shareReplay());
       } catch (err) {
         alert(`Got an error in executing function:\n\n${err}`);
         return;
@@ -759,11 +842,15 @@ export class AppComponent {
         // TODO: only supports printing out Observable input and types???
         let argsAsStr: string[] = [];
         for (const arg of testCase.args) {
-          let arr = await this.observableToArray(arg);
-          argsAsStr.push(arr.join(", "));
+          if (arg instanceof Observable) {
+            let arr = await this.observableToArray(arg);
+            argsAsStr.push("[" + arr.join(", ") + "]");
+          } else {
+            argsAsStr.push(arg.toString());
+          }
         }
         let resultArr = await this.observableToArray(result);
-        failureMessages.push(`input [${argsAsStr.join(", ")}] -> your incorrect output: [${resultArr.join(", ")}]`);
+        failureMessages.push(`input (${argsAsStr.join(", ")}) -> your incorrect output: [${this.arrayToString(resultArr)}]`);
       }
       allMatched &&= matched;
     }
@@ -776,23 +863,29 @@ export class AppComponent {
   }
 }
 
+function makeComment(text: string): string {
+  return text.split(/\r?\n/g).map(line => "// " + line).join("\n");
+}
+
 class Exercise {
   public id: string;
   public name: string;
   public description: string;
   public functionDefinition: FunctionDefinition;
   public testCases: TestCase[];
+  public comments?: string;
 
   // public sources: any;
   // public solutions: string[];
   // public outputs: any;
 
-  constructor(id: string, name: string, description: string, functionDefinition: FunctionDefinition, testCases: TestCase[]) {
+  constructor(id: string, name: string, description: string, functionDefinition: FunctionDefinition, testCases: TestCase[], comments?: string) {
     this.id = id;
     this.name = name;
     this.description = description;
     this.functionDefinition = functionDefinition;
     this.testCases = testCases;
+    this.comments = comments;
 
     // this.sources = sources;
     // this.outputs = outputs;
@@ -894,4 +987,71 @@ abstract class Solution {
       skip(2),
     );
   }
+
+  public static trackInventory(source$: Observable<InventoryEvent>, maxCapacity: number): Observable<number> {
+    class Inventory {
+      total: number = 0;
+      items: Map<string, number> = new Map<string, number>();
+    }
+  
+    class InventoryState {
+      inventory: Inventory = new Inventory();
+      currentOutput: number = 0;
+    }
+  
+    return source$.pipe(
+      scan(((state, event) => {
+        let currentItemQuantity = state.inventory.items.get(event.itemId) ?? 0;
+        console.log(currentItemQuantity);
+        if (event.quantity >= 0) {
+          let remainingCapacity = maxCapacity - state.inventory.total;
+          let addQuantity = Math.min(event.quantity, remainingCapacity);
+          state.inventory.items.set(event.itemId, currentItemQuantity + addQuantity);
+          state.inventory.total += addQuantity;
+          state.currentOutput = addQuantity;
+        } else {
+          let removeQuantity = Math.min(currentItemQuantity, -event.quantity);
+          state.inventory.items.set(event.itemId, currentItemQuantity - removeQuantity);
+          state.inventory.total -= removeQuantity;
+          state.currentOutput = -removeQuantity;
+        }
+        return state;
+      }), new InventoryState()),
+      map(state => state.currentOutput),
+    );
+  }
 }
+
+// TODO: have better way than simply copy-pasting this.
+class InventoryEvent {
+  // ID of the item.
+  public itemId: string;
+
+  // Amount changed.
+  //   * A positive value means adding to the inventory.
+  //   * A negative value means removing from the inventory.
+  public quantity: number;
+
+  constructor(itemId: string, quantity: number) {
+    this.itemId = itemId;
+    this.quantity = quantity;
+  }
+
+  public toString(): string {
+    return `{${this.itemId}, ${this.quantity}}`;
+  }
+}
+
+const INVENTORY_EVENT_STR = `
+/*
+interface InventoryEvent {
+  // Case-sensitive identifier for an item.
+  public itemId: string;
+
+  // Amount of items to be added or removed.
+  //   * A positive number means adding items.
+  //   * A negative number means removing items.
+  public quantity: number;
+}
+*/
+`.trim();
