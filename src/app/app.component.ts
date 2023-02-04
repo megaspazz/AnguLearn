@@ -1,5 +1,5 @@
 import { Component, ElementRef, ViewChild } from '@angular/core';
-import { Observable, Subject, combineLatest, combineLatestWith, concatWith, count, every, filter, firstValueFrom, from, groupBy, identity, of, last, map, mergeAll, mergeMap, noop, reduce, sequenceEqual, scan, shareReplay, skip, takeLast, tap, toArray, windowCount, zip } from 'rxjs';
+import { Observable, Subject, combineLatest, combineLatestWith, concat, concatWith, count, every, filter, firstValueFrom, from, groupBy, identity, of, last, map, mergeAll, mergeMap, noop, reduce, repeat, sequenceEqual, scan, shareReplay, skip, takeLast, tap, toArray, windowCount, zip } from 'rxjs';
 import { createJsxJsxClosingFragment, transpile } from 'typescript';
 
 import * as rxjsAlias from 'rxjs';
@@ -457,9 +457,23 @@ export class AppComponent {
     return await firstValueFrom(array$);
   }
 
+  // TODO: replace this with some sort of deepEquals() function instead.
   public observablesEqual(userAnswer$: Observable<any>, expectedAnswer$: Observable<any>): Promise<boolean> {
     let equal$ = userAnswer$.pipe(
-      sequenceEqual(expectedAnswer$),
+      sequenceEqual(expectedAnswer$, (a, b) => {
+        if (Array.isArray(a) && Array.isArray(b)) {
+          if (a.length !== b.length) {
+            return false;
+          }
+          for (let i = 0; i < a.length; ++i) {
+            if (a[i] != b[i]) {
+              return false;
+            }
+          }
+          return true;
+        }
+        return a === b;
+      }),
     );
     return firstValueFrom(equal$);
 
@@ -509,6 +523,7 @@ export class AppComponent {
 
   // TODO: finish adding more exercises.
   // TODO: add versioning to exercises in case signatures change.
+  // TODO: support HTML or some other way to display richer content for the exercise descriptions and sample test cases.
   public exercises: Exercise[] = [
     new Exercise(
       "doubleNumbers",
@@ -670,6 +685,79 @@ export class AppComponent {
       ],
       INVENTORY_EVENT_STR,
     ),
+    new Exercise(
+      "rotationPairing",
+      "Rotation Pairing",
+      `Given an Observable<string> and a "circular queue" of Observable<string> containing items to match with, pair the items from "source$" with the items in sequence in "matchWith" and return them in an Observable<[string, string]> containing tuples of the matched pairs.  For example, given a source$ of ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"] and a matchPairs of [["a"], ["b", "c"], ["d"]], return [["1", "a"],["2", "b"],["3", "c"],["4", "d"],["5", "a"],["6", "b"],["7", "c"],["8", "d"],["9", "a"],["10", "b"]].  The first pair contains the first item from source$ and the first item from matchWith[0] (0-indexed).  For the second item, it is paired with the first item from matchWith[1], since the single item from matchWith[0] got used up.  For the third item, it is paired with the second item from matchWith[1].  For the fourth item, it is paired with the first item from matchWith[2], since the items from matchWith[1] all got used.  For the fifth item, it loops back around the "circular queue" and then matches again with the first item of matchWith[0].  This goes on until all items from source$ are paired up.`,
+      new FunctionDefinition(
+        "rotationPairing",
+        "Observable<[string, string]>",
+        [
+          new Parameter("source$", "Observable<string>"),
+          new Parameter("matchWith", "Observable<string>[]"),
+        ],
+      ),
+      [
+        new TestCase(
+          [
+            of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10"),
+            [
+              of("a"),
+              of("b", "c"),
+              of("d"),
+            ],
+          ],
+          this.checkConstantObservable(of(
+            ["1", "a"],
+            ["2", "b"],
+            ["3", "c"],
+            ["4", "d"],
+            ["5", "a"],
+            ["6", "b"],
+            ["7", "c"],
+            ["8", "d"],
+            ["9", "a"],
+            ["10", "b"],
+          )),
+        ),
+        new TestCase(
+          [
+            of("uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve", "diez"),
+            [
+              of("first A", "first B", "first C"),
+              of("second A"),
+              of("third A", "third B"),
+            ]
+          ],
+          this.checkConstantObservable(of(
+            ["uno", "first A"],
+            ["dos", "first B"],
+            ["tres", "first C"],
+            ["cuatro", "second A"],
+            ["cinco", "third A"],
+            ["seis", "third B"],
+            ["siete", "first A"],
+            ["ocho", "first B"],
+            ["nueve", "first C"],
+            ["diez", "second A"],
+          )),
+        ),
+        new TestCase(
+          [
+            of("X", "Y", "Z"),
+            [
+              of("1"),
+              of("2", "3", "4", "5", "6"),
+            ],
+          ],
+          this.checkConstantObservable(of(
+            ["X", "1"],
+            ["Y", "2"],
+            ["Z", "3"],
+          )),
+        ),
+      ],
+    ),
     // TODO: build more exercises!!!
   ];
 
@@ -745,6 +833,7 @@ export class AppComponent {
     return true;
   }
 
+  // TODO: warn before resetting?
   resetCode() {
     this.setCode(this.makeCodeTemplate(this.exercise));
   }
@@ -839,18 +928,7 @@ export class AppComponent {
       }
 
       if (!matched) {
-        // TODO: only supports printing out Observable input and types???
-        let argsAsStr: string[] = [];
-        for (const arg of testCase.args) {
-          if (arg instanceof Observable) {
-            let arr = await this.observableToArray(arg);
-            argsAsStr.push("[" + arr.join(", ") + "]");
-          } else {
-            argsAsStr.push(arg.toString());
-          }
-        }
-        let resultArr = await this.observableToArray(result);
-        failureMessages.push(`input (${argsAsStr.join(", ")}) -> your incorrect output: [${this.arrayToString(resultArr)}]`);
+        failureMessages.push(`input (${await this.deepToString(testCase.args)}) -> your incorrect output: (${await this.deepToString(result)})`);
       }
       allMatched &&= matched;
     }
@@ -859,6 +937,19 @@ export class AppComponent {
       alert("SUCCESS!");
     } else {
       alert("Failed... please try again!\n\n" + failureMessages.join("\n\n"));
+    }
+  }
+
+  // TODO: add support for more types as needed?
+  async deepToString(x: any): Promise<string> {
+    if (x instanceof Observable) {
+      let arr = await this.observableToArray(x);
+      return this.deepToString(arr);
+    } else if (Array.isArray(x)) {
+      let arrStr = await Promise.all(x.map(async (val) => this.deepToString(val)));
+      return "[" + arrStr.join(", ") + "]";
+    } else {
+      return x.toString();
     }
   }
 }
@@ -923,6 +1014,40 @@ class TestCase {
     this.checker = checker;
   }
 }
+
+// TODO: have better way than simply copy-pasting this.
+class InventoryEvent {
+  // ID of the item.
+  public itemId: string;
+
+  // Amount changed.
+  //   * A positive value means adding to the inventory.
+  //   * A negative value means removing from the inventory.
+  public quantity: number;
+
+  constructor(itemId: string, quantity: number) {
+    this.itemId = itemId;
+    this.quantity = quantity;
+  }
+
+  public toString(): string {
+    return `{${this.itemId}, ${this.quantity}}`;
+  }
+}
+
+const INVENTORY_EVENT_STR = `
+/*
+interface InventoryEvent {
+  // Case-sensitive identifier for an item.
+  public itemId: string;
+
+  // Amount of items to be added or removed.
+  //   * A positive number means adding items.
+  //   * A negative number means removing items.
+  public quantity: number;
+}
+*/
+`.trim();
 
 abstract class Solution {
   public static doubleNumbers(source$: Observable<number>): Observable<number> {
@@ -1020,38 +1145,13 @@ abstract class Solution {
       map(state => state.currentOutput),
     );
   }
-}
-
-// TODO: have better way than simply copy-pasting this.
-class InventoryEvent {
-  // ID of the item.
-  public itemId: string;
-
-  // Amount changed.
-  //   * A positive value means adding to the inventory.
-  //   * A negative value means removing from the inventory.
-  public quantity: number;
-
-  constructor(itemId: string, quantity: number) {
-    this.itemId = itemId;
-    this.quantity = quantity;
-  }
-
-  public toString(): string {
-    return `{${this.itemId}, ${this.quantity}}`;
+  
+  public static circularRotation(source$: Observable<string>, matchWith: Observable<string>[]): Observable<[string, string]> {
+    return zip(
+      source$,
+      concat(...matchWith).pipe(
+        repeat(),
+      ),
+    );
   }
 }
-
-const INVENTORY_EVENT_STR = `
-/*
-interface InventoryEvent {
-  // Case-sensitive identifier for an item.
-  public itemId: string;
-
-  // Amount of items to be added or removed.
-  //   * A positive number means adding items.
-  //   * A negative number means removing items.
-  public quantity: number;
-}
-*/
-`.trim();
