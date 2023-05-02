@@ -523,7 +523,7 @@ export class AppComponent {
 
   // TODO: finish adding more exercises.
   // TODO: add versioning to exercises in case signatures change.
-  // TODO: support HTML or some other way to display richer content for the exercise descriptions and sample test cases.
+  // TODO: support HTML or markdown or some other way to display richer content for the exercise descriptions and sample test cases.
   public exercises: Exercise[] = [
     new Exercise(
       "doubleNumbers",
@@ -758,6 +758,33 @@ export class AppComponent {
         ),
       ],
     ),
+    // TODO: how to actually solve this problem?
+    new Exercise(
+      "mergeSortedStreams",
+      "Merge Sorted Streams",
+      // TODO: write example.
+      `Given an array of Observable<number> where each one is sorted, merge them all into a single sorted Observable<number>.`,
+      new FunctionDefinition(
+        "mergeSortedStreams",
+        "Observable<number>",
+        [
+          new Parameter("streams", "Observable<number>[]"),
+        ],
+      ),
+      [
+        new TestCase(
+          [
+            [
+              of(2, 4, 6),
+              of(3, 6),
+              of(6),
+              of(2, 3, 5),
+            ],
+          ],
+          this.checkConstantObservable(of(2, 2, 3, 3, 4, 5, 6, 6, 6)),
+        ),
+      ],
+    ),
     // TODO: build more exercises!!!
   ];
 
@@ -909,11 +936,13 @@ export class AppComponent {
     }
 
     let allMatched = true;
-    let failureMessages = [];
+    let failureMessages: any[] = [];
     for (const testCase of exercise.testCases) {
       let result: any;
+      let resultReplay$: Subject<any> = new Subject<any>();
       try {
         result = f(...testCase.args).pipe(shareReplay());
+        // resultReplay = resulne
       } catch (err) {
         alert(`Got an error in executing function:\n\n${err}`);
         return;
